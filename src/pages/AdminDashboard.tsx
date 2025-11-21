@@ -12,6 +12,7 @@ import {
   Trash2,
   Search,
   RotateCcw,
+  Eye,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import SalesModal from "@/components/SalesModal";
 import Navbar from "@/components/Navbar";
 import Swal from "sweetalert2";
+import PaymentViewModal from "./PaymentViewModal";
 
 const AdminDashboard = () => {
   const location = useLocation();
@@ -36,6 +38,10 @@ const AdminDashboard = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
 
+  // Payment Modal
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [selectedSale, setSelectedSale] = useState(null);
+
   // 🟢 Get user info from login
   useEffect(() => {
     if (location.state && location.state.user) {
@@ -50,7 +56,6 @@ const AdminDashboard = () => {
 
     try {
       const url = `http://127.0.0.1:8000/get_admin_user_branch_sales/${userInfo.email}/`;
-
       const res = await axios.get(url, {
         params: { from_date: startDate, to_date: endDate },
       });
@@ -80,7 +85,12 @@ const AdminDashboard = () => {
 
   // Load all data initially
   useEffect(() => {
-    if (userInfo?.email) fetchSalesData("2023-01-01", new Date().toISOString().split("T")[0], false);
+    if (userInfo?.email)
+      fetchSalesData(
+        "2023-01-01",
+        new Date().toISOString().split("T")[0],
+        false
+      );
   }, [userInfo]);
 
   // 🔹 Filter Button
@@ -103,20 +113,22 @@ const AdminDashboard = () => {
   };
 
   // 🔹 Search
-  const handleSearch = () => {
-    if (!searchTerm.trim()) {
-      setFilteredData(salesData);
-      toast.info("Showing all records");
-      return;
-    }
-    const term = searchTerm.trim().toLowerCase();
-    const filtered = salesData.filter((r) =>
-      String(r.mobile_number).toLowerCase().includes(term)
-    );
-    setFilteredData(filtered);
-    if (filtered.length === 0) toast.warn("No matching record found!");
-  };
-
+ const handleSearch = () => {
+   if (!searchTerm.trim()) {
+     setFilteredData(salesData);
+     toast.info("Showing all records");
+     return;
+   }
+ 
+   const normalizedSearch = searchTerm.trim().toLowerCase().replace(/\s+/g, "");
+   const result = salesData.filter((r) => {
+     const normalizedName = (r.name || "").toLowerCase().replace(/\s+/g, "");
+     return normalizedName.includes(normalizedSearch);
+   });
+ 
+   setFilteredData(result);
+   if (result.length === 0) toast.warn("No matching record found!");
+ };
   // 🔹 Delete Record
   const handleDeleteRecord = (saleId) => {
     Swal.fire({
@@ -151,7 +163,13 @@ const AdminDashboard = () => {
     toast.info("Add Record Mode");
   };
 
-  // Summary
+  // 🔹 View Payments
+  const handleViewPayments = (sale) => {
+    setSelectedSale(sale.sale_id); // send sale id
+    setPaymentModalOpen(true);
+  };
+
+  // 🟢 Summary Calculations
   const totalGrossSales = filteredData.reduce(
     (sum, r) => sum + (Number(r.gross_sales) || 0),
     0
@@ -164,24 +182,35 @@ const AdminDashboard = () => {
     (sum, r) => sum + (Number(r.pending_amount) || 0),
     0
   );
+  const totalCollectedAmount = filteredData.reduce(
+    (sum, r) => sum + (Number(r.received_amount) || 0),
+    0
+  );
+  const totalRevenueSharing = filteredData.reduce(
+    (sum, r) => sum + (Number(r.revenue_sharing_amount) || 0),
+    0
+  );
   const totalRecords = filteredData.length;
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-gray-100 to-gray-200">
       <Navbar user={userInfo} setUser={undefined} onToggleSidebar={undefined} />
       <div className="flex-1 overflow-auto p-6 lg:p-10">
-        <motion.div initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 25 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
           {/* Header Section */}
           <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
             <div>
               <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
               <p className="text-gray-500">Manage sales records — branch specific</p>
             </div>
-
             <div className="flex flex-wrap gap-2">
               <input
                 type="text"
-                placeholder="🔍 Search by Mobile..."
+                placeholder="🔍 Search by Name..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="border border-gray-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -215,7 +244,6 @@ const AdminDashboard = () => {
                 className="w-full border rounded-lg px-3 py-2 mt-1"
               />
             </div>
-
             <Button onClick={handleFilter} className="bg-blue-600">
               <Search size={16} /> Filter
             </Button>
@@ -226,10 +254,42 @@ const AdminDashboard = () => {
 
           {/* Summary Cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-            <SummaryCard title="Total Gross Sales" value={totalGrossSales} icon={<DollarSign className="text-green-600" size={22} />} bg="from-green-100 to-green-50" />
-            <SummaryCard title="Total Net Sales" value={totalNetSales} icon={<TrendingUp className="text-blue-600" size={22} />} bg="from-blue-100 to-blue-50" />
-            <SummaryCard title="Total Pending" value={totalPending} icon={<Package className="text-red-600" size={22} />} bg="from-red-100 to-red-50" />
-            <SummaryCard title="Total Records" value={totalRecords} icon={<Users className="text-purple-600" size={22} />} bg="from-purple-100 to-purple-50" />
+            <SummaryCard
+              title="Total Gross Sales"
+              value={totalGrossSales}
+              icon={<DollarSign className="text-green-600" size={22} />}
+              bg="from-green-100 to-green-50"
+            />
+            <SummaryCard
+              title="Total Net Sales"
+              value={totalNetSales}
+              icon={<TrendingUp className="text-blue-600" size={22} />}
+              bg="from-blue-100 to-blue-50"
+            />
+            <SummaryCard
+              title="Total Pending"
+              value={totalPending}
+              icon={<Package className="text-red-600" size={22} />}
+              bg="from-red-100 to-red-50"
+            />
+            <SummaryCard
+              title="Total Collected Amount"
+              value={totalCollectedAmount}
+              icon={<DollarSign className="text-emerald-600" size={22} />}
+              bg="from-emerald-100 to-emerald-50"
+            />
+            <SummaryCard
+              title="Total Revenue Sharing"
+              value={totalRevenueSharing}
+              icon={<TrendingUp className="text-orange-600" size={22} />}
+              bg="from-orange-100 to-orange-50"
+            />
+            <SummaryCard
+              title="Total Records"
+              value={totalRecords}
+              icon={<Users className="text-purple-600" size={22} />}
+              bg="from-purple-100 to-purple-50"
+            />
           </div>
 
           {/* Sales Table */}
@@ -246,6 +306,7 @@ const AdminDashboard = () => {
                     <thead className="bg-gradient-to-r from-blue-600 to-orange-500 text-white">
                       <tr>
                         {[
+                          "S.No",
                           "Sale ID",
                           "Branch Name",
                           "Date",
@@ -262,8 +323,12 @@ const AdminDashboard = () => {
                           "Remarks",
                           "Status",
                           "Action",
+                          "View",
                         ].map((header) => (
-                          <th key={header} className="p-2 text-left font-semibold text-gray-700">
+                          <th
+                            key={header}
+                            className="p-2 text-left font-semibold text-gray-700"
+                          >
                             {header}
                           </th>
                         ))}
@@ -271,36 +336,65 @@ const AdminDashboard = () => {
                     </thead>
                     <tbody>
                       {filteredData.length > 0 ? (
-                        filteredData.map((r) => (
-                          <tr key={r.sale_id} className="border-b hover:bg-gray-50 transition">
-                            <td className="p-2">{r.sale_id}</td>
-                            <td className="p-2">{r.branch_name}</td>
-                            <td className="p-2">{r.date}</td>
-                            <td className="p-2">{r.name}</td>
-                            <td className="p-2">{r.mobile_number}</td>
-                            <td className="p-2">₹{r.gross_sales}</td>
-                            <td className="p-2">₹{r.vendor_referral_payment}</td>
-                            <td className="p-2">{r.vendor_referral_name}</td>
-                            <td className="p-2">{r.revenue_sharing_name}</td>
-                            <td className="p-2">₹{r.revenue_sharing_amount}</td>
-                            <td className="p-2">₹{r.net_sales}</td>
-                            <td className="p-2">₹{r.received_amount}</td>
-                            <td className="p-2">₹{r.pending_amount}</td>
-                            <td className="p-2">{r.remarks}</td>
-                            <td className="p-2">{r.status}</td>
-                            <td className="p-2 flex gap-2">
-                              <Button variant="ghost" size="icon" onClick={() => { setEditingRecord(r); setModalOpen(true); }}>
-                                <Edit className="h-4 w-4 text-blue-600" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleDeleteRecord(r.sale_id)}>
-                                <Trash2 className="h-4 w-4 text-red-600" />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))
+                        [...filteredData]
+                          .sort((a, b) => a.sale_id - b.sale_id)
+                          .map((r,i) => (
+                            <tr
+                              key={r.sale_id}
+                              className="border-b hover:bg-gray-50 transition"
+                            >
+                               <td className="p-2">{i+1}</td>
+                              <td className="p-2">{r.sale_id}</td>
+                              <td className="p-2">{r.branch_name}</td>
+                              <td className="p-2">{r.date}</td>
+                              <td className="p-2">{r.name}</td>
+                              <td className="p-2">{r.mobile_number}</td>
+                              <td className="p-2">₹{r.gross_sales}</td>
+                              <td className="p-2">₹{r.vendor_referral_payment}</td>
+                              <td className="p-2">{r.vendor_referral_name}</td>
+                              <td className="p-2">{r.revenue_sharing_name}</td>
+                              <td className="p-2">₹{r.revenue_sharing_amount}</td>
+                              <td className="p-2">₹{r.net_sales}</td>
+                              <td className="p-2">₹{r.received_amount}</td>
+                              <td className="p-2">₹{r.pending_amount}</td>
+                              <td className="p-2">{r.remarks}</td>
+                              <td className="p-2">{r.status}</td>
+                              <td className="p-2 flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setEditingRecord(r);
+                                    setModalOpen(true);
+                                  }}
+                                >
+                                  <Edit className="h-4 w-4 text-blue-600" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteRecord(r.sale_id)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </td>
+                              <td className="p-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleViewPayments(r)}
+                                >
+                                  <Eye className="h-4 w-4 text-green-600" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))
                       ) : (
                         <tr>
-                          <td colSpan={16} className="text-center text-gray-500 py-4 italic">
+                          <td
+                            colSpan={17}
+                            className="text-center text-gray-500 py-4 italic"
+                          >
                             No sales records found
                           </td>
                         </tr>
@@ -312,7 +406,7 @@ const AdminDashboard = () => {
             </CardContent>
           </Card>
 
-          {/* Modal */}
+          {/* Sales Modal */}
           <SalesModal
             isOpen={modalOpen}
             onClose={() => setModalOpen(false)}
@@ -322,6 +416,15 @@ const AdminDashboard = () => {
             email={userInfo?.email}
             role={userInfo?.role}
           />
+
+          {/* Payment View Modal */}
+          <PaymentViewModal
+            open={paymentModalOpen}
+            onClose={() => setPaymentModalOpen(false)}
+            saleDetails={selectedSale}
+            refreshSales={() => fetchSalesData(fromDate, toDate)}
+            role={userInfo}
+          />
         </motion.div>
       </div>
     </div>
@@ -329,14 +432,21 @@ const AdminDashboard = () => {
 };
 
 // 🔹 Summary Card Component
-const SummaryCard = ({ title, value, icon, bg }) => (
-  <div className={`rounded-xl shadow-sm p-5 flex items-center justify-between bg-gradient-to-br ${bg}`}>
-    <div>
-      <h3 className="text-gray-700 text-sm font-medium">{title}</h3>
-      <p className="text-xl font-bold mt-1">₹{value.toLocaleString()}</p>
+export function SummaryCard({ title, value, icon, bg }) {
+  const isRecord = title.toLowerCase().includes("record");
+  return (
+    <div
+      className={`flex items-center justify-between p-4 bg-gradient-to-br ${bg} rounded-2xl shadow-sm`}
+    >
+      <div>
+        <h3 className="text-gray-700 text-sm font-medium">{title}</h3>
+        <p className="text-xl font-bold mt-1">
+          {isRecord ? value : `₹${Number(value).toLocaleString("en-IN")}`}
+        </p>
+      </div>
+      <div className="text-3xl">{icon}</div>
     </div>
-    {icon}
-  </div>
-);
+  );
+}
 
 export default AdminDashboard;

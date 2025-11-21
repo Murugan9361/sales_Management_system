@@ -213,14 +213,12 @@ const SalesModal = ({ isOpen, onClose, record, onSave, user, email, role }) => {
             {/* Form */}
             <form
               onSubmit={handleSubmit}
-              className="grid grid-cols-1 md:grid-cols-2 gap-5"
+              className="grid grid-cols-1 md:grid-cols-3 gap-5"
             >
               {/* Branch Name */}
-              <div>
+              <div className="col-span-1">
                 <Label>Branch Name *</Label>
-
                 {user?.role === "Super Admin" ? (
-                  // 🔹 Show dropdown for Super Admin
                   <Select
                     value={formData.branch_name}
                     onValueChange={(value) =>
@@ -239,7 +237,6 @@ const SalesModal = ({ isOpen, onClose, record, onSave, user, email, role }) => {
                     </SelectContent>
                   </Select>
                 ) : (
-                  // 🔹 Show readonly input for Admin/User
                   <Input
                     type="text"
                     value={user?.branch_name || formData.branch_name}
@@ -250,7 +247,7 @@ const SalesModal = ({ isOpen, onClose, record, onSave, user, email, role }) => {
               </div>
 
               {/* Date */}
-              <div>
+              <div className="col-span-1">
                 <Label>Date *</Label>
                 <Input
                   type="date"
@@ -261,7 +258,7 @@ const SalesModal = ({ isOpen, onClose, record, onSave, user, email, role }) => {
               </div>
 
               {/* Name */}
-              <div>
+              <div className="col-span-1">
                 <Label>Name *</Label>
                 <Input
                   value={formData.name}
@@ -294,6 +291,18 @@ const SalesModal = ({ isOpen, onClose, record, onSave, user, email, role }) => {
                 />
               </div>
 
+              {/* Vendor Referral Name */}
+              <div>
+                <Label>Vendor Referral Name *</Label>
+                <Input
+                  value={formData.vendor_referral_name}
+                  onChange={(e) =>
+                    handleChange("vendor_referral_name", e.target.value)
+                  }
+                  required
+                />
+              </div>
+
               {/* Vendor Referral Payment */}
               <div>
                 <Label>Vendor Referral Payment *</Label>
@@ -302,18 +311,6 @@ const SalesModal = ({ isOpen, onClose, record, onSave, user, email, role }) => {
                   value={formData.vendor_referral_payment}
                   onChange={(e) =>
                     handleChange("vendor_referral_payment", e.target.value)
-                  }
-                  required
-                />
-              </div>
-
-              {/* Vendor Referral Name */}
-              <div>
-                <Label>Vendor Referral Name *</Label>
-                <Input
-                  value={formData.vendor_referral_name}
-                  onChange={(e) =>
-                    handleChange("vendor_referral_name", e.target.value)
                   }
                   required
                 />
@@ -342,31 +339,19 @@ const SalesModal = ({ isOpen, onClose, record, onSave, user, email, role }) => {
                 />
               </div>
 
-              {/* Received Amount */}
-              <div>
-                <Label>Received Amount *</Label>
-                <Input
-                  type="number"
-                  value={formData.received_amount}
-                  onChange={(e) =>
-                    handleChange("received_amount", e.target.value)
-                  }
-                  required
-                />
-              </div>
-
-              {/* Remarks */}
+              {/* Remarks (2 columns) */}
               <div className="md:col-span-2">
                 <Label>Remarks</Label>
                 <Textarea
                   rows={3}
                   value={formData.remarks}
                   onChange={(e) => handleChange("remarks", e.target.value)}
+                  className="w-full"
                 />
               </div>
 
-              {/* Status */}
-              <div className="md:col-span-2">
+              {/* Status (1 column) */}
+              <div className="md:col-span-1">
                 <Label>Status *</Label>
                 <Select
                   value={formData.status}
@@ -382,8 +367,8 @@ const SalesModal = ({ isOpen, onClose, record, onSave, user, email, role }) => {
                 </Select>
               </div>
 
-              {/* Buttons */}
-              <div className="md:col-span-2 flex justify-end gap-3 mt-6">
+              {/* Buttons (Full width) */}
+              <div className="md:col-span-3 flex justify-end gap-3 mt-6">
                 <Button type="button" variant="outline" onClick={onClose}>
                   Cancel
                 </Button>

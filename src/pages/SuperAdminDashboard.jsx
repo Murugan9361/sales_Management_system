@@ -12,6 +12,7 @@ import {
   Trash2,
   Search,
   RotateCcw,
+  Eye,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import SalesModal from "@/components/SalesModal";
 import Navbar from "@/components/Navbar";
 import Swal from "sweetalert2";
+import PaymentViewModal from "./PaymentViewModal";
 
 const SuperAdminDashboard = () => {
   const location = useLocation();
@@ -30,13 +32,16 @@ const SuperAdminDashboard = () => {
 
   // Filters
   const [branch, setBranch] = useState("All");
-  const [fromDate, setFromDate] = useState("2023-01-01");
+  const [fromDate, setFromDate] = useState("2025-01-01");
   const [toDate, setToDate] = useState(new Date().toISOString().split("T")[0]);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Modal
+  // Modals
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentData, setPaymentData] = useState({});
+  const [selectedSale, setSelectedSale] = useState(null);
 
   // 🟢 Fetch user info
   useEffect(() => {
@@ -44,21 +49,21 @@ const SuperAdminDashboard = () => {
       setUserInfo(location.state.user.user_info);
     }
   }, [location.state]);
+ 
 
-  // 🟢 Fetch branch list (for filter dropdown)
+  // 🟢 Fetch branch list
   useEffect(() => {
     const fetchBranches = async () => {
       try {
         const res = await axios.get("http://127.0.0.1:8000/get_all_branches/");
         setBranches(res.data.branches || []);
-        console.log(res.data.branches)
       } catch {
         toast.error("Failed to load branch list");
       }
     };
     fetchBranches();
   }, []);
-console.log(branches.branches)
+
   // 🟢 Fetch Sales Data
   const fetchSalesData = async (branch_name, start_date, end_date) => {
     setLoading(true);
@@ -78,12 +83,11 @@ console.log(branches.branches)
     }
   };
 
-  // Initial load
   useEffect(() => {
     fetchSalesData(branch, fromDate, toDate);
   }, [branch]);
 
-  // 🔹 Filter
+  // 🔹 Filter & Reset & Search
   const handleFilter = () => {
     if (new Date(fromDate) > new Date(toDate)) {
       toast.error("From date cannot be after To date");
@@ -92,7 +96,6 @@ console.log(branches.branches)
     fetchSalesData(branch, fromDate, toDate);
   };
 
-  // 🔹 Reset
   const handleReset = () => {
     const defaultFrom = "2023-01-01";
     const defaultTo = new Date().toISOString().split("T")[0];
@@ -103,22 +106,24 @@ console.log(branches.branches)
     fetchSalesData("All", defaultFrom, defaultTo);
   };
 
-  // 🔹 Search
-  const handleSearch = () => {
-    if (!searchTerm.trim()) {
-      setFilteredData(salesData);
-      toast.info("Showing all records");
-      return;
-    }
-    const term = searchTerm.toLowerCase();
-    const filtered = salesData.filter((r) =>
-      String(r.mobile_number).toLowerCase().includes(term)
-    );
-    setFilteredData(filtered);
-    if (filtered.length === 0) toast.warn("No matching record found!");
-  };
+ const handleSearch = () => {
+  if (!searchTerm.trim()) {
+    setFilteredData(salesData);
+    toast.info("Showing all records");
+    return;
+  }
 
-  // 🔹 Delete
+  const normalizedSearch = searchTerm.trim().toLowerCase().replace(/\s+/g, "");
+  const result = salesData.filter((r) => {
+    const normalizedName = (r.name || "").toLowerCase().replace(/\s+/g, "");
+    return normalizedName.includes(normalizedSearch);
+  });
+
+  setFilteredData(result);
+  if (result.length === 0) toast.warn("No matching record found!");
+};
+
+  // 🔹 Delete Record
   const handleDeleteRecord = (saleId) => {
     Swal.fire({
       title: "Are you sure?",
@@ -140,19 +145,23 @@ console.log(branches.branches)
     });
   };
 
-  // 🟢 Save Record
+  // 🔹 View Payment Modal
+  const handleViewPayments = async (sale) => {
+   setSelectedSale(sale)
+setPaymentModalOpen(true);
+  };
+
+  // 🔹 Add/Edit Sales Modal
   const handleSaveRecord = () => {
     fetchSalesData(branch, fromDate, toDate);
     setModalOpen(false);
   };
-
-  // 🟢 Add Record
   const handleAddRecord = () => {
     setEditingRecord(null);
     setModalOpen(true);
   };
 
-  // 🔹 Summary
+  // 🔹 Summary Calculations
   const totalGrossSales = filteredData.reduce(
     (sum, r) => sum + (Number(r.gross_sales) || 0),
     0
@@ -163,6 +172,14 @@ console.log(branches.branches)
   );
   const totalPending = filteredData.reduce(
     (sum, r) => sum + (Number(r.pending_amount) || 0),
+    0
+  );
+  const totalCollectedAmount = filteredData.reduce(
+    (sum, r) => sum + (Number(r.received_amount) || 0),
+    0
+  );
+  const totalRevenueSharing = filteredData.reduce(
+    (sum, r) => sum + (Number(r.revenue_sharing_amount) || 0),
     0
   );
   const totalRecords = filteredData.length;
@@ -186,11 +203,10 @@ console.log(branches.branches)
                 Manage company-wide sales across all branches
               </p>
             </div>
-
             <div className="flex flex-wrap gap-2">
               <input
                 type="text"
-                placeholder="🔍 Search by Mobile..."
+                placeholder="Search Mobile Name..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="border border-gray-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -245,11 +261,9 @@ console.log(branches.branches)
                 className="border rounded-lg px-3 py-2 w-full mt-1"
               />
             </div>
-
             <Button onClick={handleFilter} className="bg-blue-600">
               <Search size={16} /> Filter
             </Button>
-
             <Button onClick={handleReset} className="bg-orange-500">
               <RotateCcw size={16} /> Reset
             </Button>
@@ -276,6 +290,18 @@ console.log(branches.branches)
               bg="from-red-100 to-red-50"
             />
             <SummaryCard
+              title="Total Collected Amount"
+              value={totalCollectedAmount}
+              icon={<DollarSign className="text-emerald-600" size={22} />}
+              bg="from-emerald-100 to-emerald-50"
+            />
+            <SummaryCard
+              title="Total Revenue Sharing"
+              value={totalRevenueSharing}
+              icon={<TrendingUp className="text-orange-600" size={22} />}
+              bg="from-orange-100 to-orange-50"
+            />
+            <SummaryCard
               title="Total Records"
               value={totalRecords}
               icon={<Users className="text-purple-600" size={22} />}
@@ -283,7 +309,7 @@ console.log(branches.branches)
             />
           </div>
 
-          {/* Table */}
+          {/* Sales Table */}
           <Card className="shadow-md rounded-xl">
             <CardHeader>
               <CardTitle className="text-lg font-semibold">
@@ -299,6 +325,7 @@ console.log(branches.branches)
                     <thead className="bg-gradient-to-r from-blue-600 to-orange-500 text-white">
                       <tr>
                         {[
+                          "S.No",
                           "Sale ID",
                           "Branch Name",
                           "Date",
@@ -315,63 +342,76 @@ console.log(branches.branches)
                           "Remarks",
                           "Status",
                           "Action",
-                        ].map((header) => (
+                          "View",
+                        ].map((h) => (
                           <th
-                            key={header}
+                            key={h}
                             className="p-2 text-left font-semibold text-gray-700"
                           >
-                            {header}
+                            {h}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {filteredData.length > 0 ? (
-                        filteredData.map((r) => (
-                          <tr
-                            key={r.sale_id}
-                            className="border-b hover:bg-gray-50 transition"
-                          >
-                            <td className="p-2">{r.sale_id}</td>
-                            <td className="p-2">{r.branch_name}</td>
-                            <td className="p-2">{r.date}</td>
-                            <td className="p-2">{r.name}</td>
-                            <td className="p-2">{r.mobile_number}</td>
-                            <td className="p-2">₹{r.gross_sales}</td>
-                            <td className="p-2">₹{r.vendor_referral_payment}</td>
-                            <td className="p-2">{r.vendor_referral_name}</td>
-                            <td className="p-2">{r.revenue_sharing_name}</td>
-                            <td className="p-2">₹{r.revenue_sharing_amount}</td>
-                            <td className="p-2">₹{r.net_sales}</td>
-                            <td className="p-2">₹{r.received_amount}</td>
-                            <td className="p-2">₹{r.pending_amount}</td>
-                            <td className="p-2">{r.remarks}</td>
-                            <td className="p-2">{r.status}</td>
-                            <td className="p-2 flex gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  setEditingRecord(r);
-                                  setModalOpen(true);
-                                }}
-                              >
-                                <Edit className="h-4 w-4 text-blue-600" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteRecord(r.sale_id)}
-                              >
-                                <Trash2 className="h-4 w-4 text-red-600" />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))
+                        filteredData
+                          .sort((a, b) => a.sale_id - b.sale_id)
+                          .map((r,i) => (
+                            <tr
+                              key={r.sale_id}
+                              className="border-b hover:bg-gray-50 transition"
+                            >
+                              <td className="p-2">{i+1}</td>
+                              <td className="p-2">{r.sale_id}</td>
+                              <td className="p-2">{r.branch_name}</td>
+                              <td className="p-2">{r.date}</td>
+                              <td className="p-2">{r.name}</td>
+                              <td className="p-2">{r.mobile_number}</td>
+                              <td className="p-2">₹{r.gross_sales}</td>
+                              <td className="p-2">₹{r.vendor_referral_payment}</td>
+                              <td className="p-2">{r.vendor_referral_name}</td>
+                              <td className="p-2">{r.revenue_sharing_name}</td>
+                              <td className="p-2">₹{r.revenue_sharing_amount}</td>
+                              <td className="p-2">₹{r.net_sales}</td>
+                              <td className="p-2">₹{r.received_amount}</td>
+                              <td className="p-2">₹{r.pending_amount}</td>
+                              <td className="p-2">{r.remarks}</td>
+                              <td className="p-2">{r.status}</td>
+                              <td className="p-2 flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setEditingRecord(r);
+                                    setModalOpen(true);
+                                  }}
+                                >
+                                  <Edit className="h-4 w-4 text-blue-600" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteRecord(r.sale_id)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </td>
+                              <td className="p-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleViewPayments(r.sale_id)}
+                                >
+                                  <Eye className="h-4 w-4 text-green-600" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))
                       ) : (
                         <tr>
                           <td
-                            colSpan={16}
+                            colSpan={17}
                             className="text-center text-gray-500 py-4 italic"
                           >
                             No sales records found
@@ -385,7 +425,7 @@ console.log(branches.branches)
             </CardContent>
           </Card>
 
-          {/* Modal */}
+          {/* Sales Modal */}
           <SalesModal
             isOpen={modalOpen}
             onClose={() => setModalOpen(false)}
@@ -395,23 +435,38 @@ console.log(branches.branches)
             email={userInfo?.email}
             role={userInfo?.role}
           />
+
+          {/* Payment View Modal */}
+          <PaymentViewModal
+            open={paymentModalOpen}
+            onClose={() => setPaymentModalOpen(false)}
+            saleDetails={selectedSale}
+            payments={paymentData}
+            refreshSales={() => fetchSalesData(branch, fromDate, toDate)} 
+            role={userInfo}
+          />
         </motion.div>
       </div>
     </div>
   );
 };
 
-// 🔹 Reusable Summary Card
-const SummaryCard = ({ title, value, icon, bg }) => (
-  <div
-    className={`rounded-xl shadow-sm p-5 flex items-center justify-between bg-gradient-to-br ${bg}`}
-  >
-    <div>
-      <h3 className="text-gray-700 text-sm font-medium">{title}</h3>
-      <p className="text-xl font-bold mt-1">₹{value.toLocaleString()}</p>
+// 🔹 Summary Card
+export function SummaryCard({ title, value, icon, bg }) {
+  const isRecord = title.toLowerCase().includes("record");
+  return (
+    <div
+      className={`flex items-center justify-between p-4 bg-gradient-to-br ${bg} rounded-2xl shadow-sm`}
+    >
+      <div>
+        <h3 className="text-gray-700 text-sm font-medium">{title}</h3>
+        <p className="text-xl font-bold mt-1">
+          {isRecord ? value : `₹${Number(value).toLocaleString("en-IN")}`}
+        </p>
+      </div>
+      <div className="text-3xl">{icon}</div>
     </div>
-    {icon}
-  </div>
-);
+  );
+}
 
 export default SuperAdminDashboard;
