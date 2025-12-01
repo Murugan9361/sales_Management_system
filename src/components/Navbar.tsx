@@ -9,6 +9,7 @@ import Swal from "sweetalert2";
 const Navbar = ({ user, setUser, onToggleSidebar, }) => {
   const navigate = useNavigate();
   console.log(user)
+  console.log(user)
 
 const handleLogout = () => {
   localStorage.removeItem("userRole")
